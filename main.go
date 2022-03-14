@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Jeffail/gabs/v2"
 	"github.com/go-resty/resty/v2"
 )
 
@@ -256,6 +257,7 @@ func main() {
 	fmt.Println(cut_xsrf)
 	fmt.Println(_xsrf)
 
+	// Send push
 	resp, err = client.R().
 		SetHeaders(map[string]string{
 			"Host":             "api-d9c5afcf.duosecurity.com",
@@ -272,24 +274,95 @@ func main() {
 			"days_to_block":    "None",
 		}).
 		Post("https://api-d9c5afcf.duosecurity.com/frame/prompt")
+	if err != nil {
+		panic(err)
+	}
 
-	fmt.Println(resp.String())
+	jsonParsed, err := gabs.ParseJSON(resp.Body())
+	if err != nil {
+		panic(err)
+	}
+	status := jsonParsed.Path("stat").Data().(string)
+	txid := ""
+	if status == "OK" {
+		txid = jsonParsed.Path("response.txid").Data().(string)
+	}
 
-	// if resp.StatusCode() != 302 {
-	// 	fmt.Println("request for sid response not 302")
-	// 	fmt.Println(resp.String())
-	// 	fmt.Println(resp.Header())
-	// 	return
-	// }
+	// first status check for push
+	resp, err = client.R().
+		SetHeaders(map[string]string{
+			"Host":             "api-d9c5afcf.duosecurity.com",
+			"X-Xsrftoken":      _xsrf,
+			"X-Requested-With": "XMLHttpRequest",
+			"Content-Type":     "application/x-www-form-urlencoded; charset=UTF-8",
+			"User-Agent":       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36",
+		}).
+		SetBody(map[string]string{
+			"sid":  sid,
+			"txid": txid,
+		}).
+		Post("https://api-d9c5afcf.duosecurity.com/frame/status")
+	if err != nil {
+		panic(err)
+	}
+	jsonParsed, err = gabs.ParseJSON(resp.Body())
+	if err != nil {
+		panic(err)
+	}
+	status = jsonParsed.Path("stat").Data().(string)
+	if status == "OK" {
+		status_code := jsonParsed.Path("response.status_code").Data().(string)
+		if status_code != "pushed" {
+			fmt.Println(resp.String())
+		}
+	}
 
-	// sid_chunk := resp.Header().Get("location")
-	// sid := NewSkipTillReader(strings.NewReader(resp.String()), []byte(sid_chunk))
+	// second status check for push
+	resp, err = client.R().
+		SetHeaders(map[string]string{
+			"Host":             "api-d9c5afcf.duosecurity.com",
+			"X-Xsrftoken":      _xsrf,
+			"X-Requested-With": "XMLHttpRequest",
+			"Content-Type":     "application/x-www-form-urlencoded; charset=UTF-8",
+			"User-Agent":       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36",
+		}).
+		SetBody(map[string]string{
+			"sid":  sid,
+			"txid": txid,
+		}).
+		Post("https://api-d9c5afcf.duosecurity.com/frame/status")
+	if err != nil {
+		panic(err)
+	}
+	jsonParsed, err = gabs.ParseJSON(resp.Body())
+	if err != nil {
+		panic(err)
+	}
+	status = jsonParsed.Path("stat").Data().(string)
+	if status == "OK" {
+		status_code := jsonParsed.Path("response.status_code").Data().(string)
+		if status_code != "allowed" {
+			fmt.Println(resp.String())
+			return
+		}
+	}
+	request_url := fmt.Sprintf("https://api-d9c5afcf.duosecurity.com%s", jsonParsed.Path("response.result_url").Data().(string))
 
-	// resp, err = client.R().
-	// 	Post("https://api-d9c5afcf.duosecurity.com/frame/prompt")
-	// if err != nil {
-	// 	panic(err)
-	// }
-
+	// get auth cookies
+	resp, err = client.R().
+		SetHeaders(map[string]string{
+			"Host":             "api-d9c5afcf.duosecurity.com",
+			"X-Xsrftoken":      _xsrf,
+			"X-Requested-With": "XMLHttpRequest",
+			"Content-Type":     "application/x-www-form-urlencoded; charset=UTF-8",
+			"User-Agent":       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36",
+		}).
+		SetBody(map[string]string{
+			"sid": sid,
+		}).
+		Post(request_url)
+	if err != nil {
+		panic(err)
+	}
 	fmt.Println(username, password, url, location, description)
 }
