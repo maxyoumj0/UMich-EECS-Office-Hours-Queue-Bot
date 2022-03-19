@@ -14,6 +14,7 @@
         "tabs"
     ],
     "host_permissions": [
-        "https://*.eecsoh.eecs.umich.edu/"
+        "https://*.eecsoh.eecs.umich.edu/",
+        "http://*.localhost:3000/*"
     ]
   }

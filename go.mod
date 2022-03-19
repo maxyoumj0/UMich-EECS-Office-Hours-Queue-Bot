@@ -3,6 +3,7 @@ module ohbot
 go 1.15
 
 require (
+	github.com/Jeffail/gabs v1.4.0 // indirect
 	github.com/Jeffail/gabs/v2 v2.6.1 // indirect
 	github.com/PuerkitoBio/goquery v1.8.0 // indirect
 	github.com/antchfx/htmlquery v1.2.4 // indirect

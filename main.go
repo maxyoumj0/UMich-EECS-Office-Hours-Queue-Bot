@@ -10,8 +10,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/Jeffail/gabs"
 	"github.com/go-resty/resty/v2"
-	"github.com/gorilla/pat"
 )
 
 type SkipTillReader struct {
@@ -101,28 +101,20 @@ func (rtr *ReadTillReader) Read(p []byte) (n int, err error) {
 }
 
 type Cookie struct {
-	Name  string
-	Value string
+	Value string `json:"value"`
 }
 
-func read_input() (string, string, string, string, string) {
-	username := ""
-	password := ""
+func read_input() (string, string, string) {
 	location := ""
 	description := ""
 	course_id := ""
-	fmt.Println("Enter UMich Login")
-	fmt.Printf("Username: ")
-	fmt.Scanln(&username)
-	fmt.Printf("Password: ")
-	fmt.Scanln(&password)
-	fmt.Printf("Course ID: ")
+	fmt.Printf("Course ID (last part of url): ")
 	fmt.Scanln(&course_id)
 	fmt.Printf("Location: ")
 	fmt.Scanln(&location)
 	fmt.Printf("Description: ")
 	fmt.Scanln(&description)
-	return username, password, course_id, location, description
+	return course_id, location, description
 }
 
 func login(client *resty.Client, username string, password string, course_id string) bool {
@@ -375,30 +367,127 @@ func login(client *resty.Client, username string, password string, course_id str
 
 func run_server() {
 	fmt.Println("HERE")
-	p := pat.New()
 	session_cookie := ""
-	p.Post("/send_session/", func(res http.ResponseWriter, req *http.Request) {
-		session_cookie = req.PostFormValue("session")
+
+	http.HandleFunc("/send_session/", func(w http.ResponseWriter, r *http.Request) {
+		session_cookie = r.PostFormValue("session")
 	})
-	p.Get("/get_session/", func(res http.ResponseWriter, req *http.Request) {
-		data := Cookie{"session", session_cookie}
+
+	http.HandleFunc("/get_session/", func(w http.ResponseWriter, r *http.Request) {
+		data := Cookie{session_cookie}
 		jData, err := json.Marshal(data)
 		if err != nil {
 			panic(err)
 		}
-		res.Header().Set("Content-Type", "application/json")
-		res.WriteHeader(http.StatusCreated)
-		res.Write(jData)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusCreated)
+		w.Write(jData)
 	})
-	fmt.Println("HOSTING")
-	log.Fatal(http.ListenAndServe(":3000", p))
+
+	fmt.Printf("Starting server at port 3000\n")
+	if err := http.ListenAndServe(":3000", nil); err != nil {
+		log.Fatal(err)
+	}
+}
+
+func post_queue(client *resty.Client, course_id string, location string, description string) {
+	fmt.Println("Fetching login... Use the chrome extension to login")
+	session := ""
+	for session == "" {
+		resp, err := client.R().
+			SetHeaders(map[string]string{
+				"accept": "*/*",
+			}).
+			Get("http://localhost:3000/get_session/")
+		if err != nil {
+			fmt.Println(err)
+			continue
+		}
+		jsonParsed, err := gabs.ParseJSON(resp.Body())
+		if err != nil {
+			fmt.Println(err)
+			continue
+		}
+		session = jsonParsed.Path("value").Data().(string)
+		time.Sleep(500 * time.Millisecond)
+	}
+	client.SetCookie(&http.Cookie{
+		Name:     "session",
+		Value:    session,
+		Path:     "/",
+		Domain:   "eecsoh.eecs.umich.edu",
+		MaxAge:   0,
+		HttpOnly: true,
+		Secure:   true,
+	})
+	fmt.Println("Session Fetched!")
+
+	open := false
+	for !open {
+		fmt.Println("Checking Queue...")
+		resp, err := client.R().
+			SetHeaders(map[string]string{
+				"accept":          "*/*",
+				"accept-encoding": "gzip, deflate, br",
+				"referer":         fmt.Sprintf("https://eecsoh.eecs.umich.edu/api/queues/%s", course_id),
+				"user-agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36",
+			}).
+			Get(fmt.Sprintf("https://eecsoh.eecs.umich.edu/api/queues/%s", course_id))
+		if err != nil {
+			fmt.Println(err)
+			continue
+		}
+		jsonParsed, err := gabs.ParseJSON(resp.Body())
+		if err != nil {
+			fmt.Println(err)
+			continue
+		}
+		open = jsonParsed.Path("open").Data().(bool)
+		if !open {
+			fmt.Println("Queue Closed. Retrying in 500ms")
+			time.Sleep(500 * time.Millisecond)
+		}
+	}
+	fmt.Println("Queue Open!")
+	done := false
+	for !done {
+		resp, err := client.R().
+			SetHeaders(map[string]string{
+				"origin":          "https://eecsoh.eecs.umich.edu",
+				"user-agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36",
+				"accept":          "*/*",
+				"accept-encoding": "gzip, deflate, br",
+				"referer":         fmt.Sprintf("https://eecsoh.eecs.umich.edu/api/queues/%s", course_id),
+			}).
+			SetBody(map[string]string{
+				"description": description,
+				"location":    location,
+			}).
+			Post(fmt.Sprintf("https://eecsoh.eecs.umich.edu/api/queues/%s/entries", course_id))
+		if err != nil {
+			fmt.Println(err)
+			continue
+		}
+		jsonParsed, err := gabs.ParseJSON(resp.Body())
+		if err != nil {
+			fmt.Println(err)
+			continue
+		}
+		_, ok := jsonParsed.Path("open").Data().(bool)
+		if ok {
+			done = true
+		} else {
+			fmt.Println("Queue Entry Failed. Retrying in 200ms")
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+	fmt.Println("Queue Successfully Entered!")
 }
 
 func main() {
-	username, password, course_id, location, description := read_input()
+	course_id, location, description := read_input()
 	client := resty.New()
 	client.SetTimeout(4 * time.Second)
 	go run_server()
-	login(client, username, password, course_id)
-	fmt.Println(username, password, course_id, location, description)
+	post_queue(client, course_id, location, description)
 }
