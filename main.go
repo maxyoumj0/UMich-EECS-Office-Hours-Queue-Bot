@@ -366,7 +366,6 @@ func login(client *resty.Client, username string, password string, course_id str
 }
 
 func run_server() {
-	fmt.Println("HERE")
 	session_cookie := ""
 
 	http.HandleFunc("/send_session/", func(w http.ResponseWriter, r *http.Request) {
