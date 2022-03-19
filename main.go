@@ -365,6 +365,10 @@ func login(client *resty.Client, username string, password string, course_id str
 	return true
 }
 
+func auth() {
+
+}
+
 func run_server() {
 	session_cookie := ""
 
@@ -422,6 +426,7 @@ func post_queue(client *resty.Client, course_id string, location string, descrip
 	fmt.Println("Session Fetched!")
 
 	open := false
+	enable_location_field := true
 	for !open {
 		fmt.Println("Checking Queue...")
 		resp, err := client.R().
@@ -441,8 +446,13 @@ func post_queue(client *resty.Client, course_id string, location string, descrip
 			fmt.Println(err)
 			continue
 		}
-		open = jsonParsed.Path("open").Data().(bool)
-		if !open {
+		open, ok1 := jsonParsed.Path("open").Data().(bool)
+		enable_location_field = jsonParsed.Path("config.enable_location_field").Data().(bool)
+		if !ok1 {
+			fmt.Println("Missing Fields! Retrying...")
+			continue
+		}
+		if !ok1 || !open {
 			fmt.Println("Queue Closed. Retrying in 500ms")
 			time.Sleep(500 * time.Millisecond)
 		}
@@ -450,6 +460,17 @@ func post_queue(client *resty.Client, course_id string, location string, descrip
 	fmt.Println("Queue Open!")
 	done := false
 	for !done {
+		body := map[string]string{
+			"description": description,
+			"location":    "(disabled)",
+		}
+		if enable_location_field {
+			body = map[string]string{
+				"description": description,
+				"location":    location,
+			}
+		}
+
 		resp, err := client.R().
 			SetHeaders(map[string]string{
 				"origin":          "https://eecsoh.eecs.umich.edu",
@@ -458,10 +479,7 @@ func post_queue(client *resty.Client, course_id string, location string, descrip
 				"accept-encoding": "gzip, deflate, br",
 				"referer":         fmt.Sprintf("https://eecsoh.eecs.umich.edu/api/queues/%s", course_id),
 			}).
-			SetBody(map[string]string{
-				"description": description,
-				"location":    location,
-			}).
+			SetBody(body).
 			Post(fmt.Sprintf("https://eecsoh.eecs.umich.edu/api/queues/%s/entries", course_id))
 		if err != nil {
 			fmt.Println(err)
@@ -487,6 +505,9 @@ func main() {
 	course_id, location, description := read_input()
 	client := resty.New()
 	client.SetTimeout(4 * time.Second)
+
+	auth()
+
 	go run_server()
 	post_queue(client, course_id, location, description)
 }
