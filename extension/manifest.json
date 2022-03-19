@@ -1,0 +1,19 @@
+{
+    "name": "OH Bot Login Extension",
+    "description": "OH Bot Login Extension",
+    "version": "1.0",
+    "manifest_version": 3,
+    "action": {
+        
+    },
+    "background": {
+        "service_worker": "background.js"
+    },
+    "permissions": [
+        "cookies",
+        "tabs"
+    ],
+    "host_permissions": [
+        "https://*.eecsoh.eecs.umich.edu/"
+    ]
+  }
