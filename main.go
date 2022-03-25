@@ -455,7 +455,7 @@ func main() {
 	client := resty.New()
 	client.SetTimeout(4 * time.Second)
 	fmt.Println("----OH Bot Authentication----")
-	verified := true
+	verified := false
 	for !verified {
 		verified = auth(client)
 	}
@@ -471,26 +471,3 @@ func main() {
 		return
 	}
 }
-
-/*	url: "wss://oh.eecs.umich.edu/cable"
-  	protocol: "actioncable-v1-json"
-
-	receive welcome
-	type: "welcome"
-
-	send command: "subscribe"
-	identifier: "{\"channel\":\"QueueChannel\",\"id\":732}"
-
-	receive subscription confirm
-	identifier: "{\"channel\":\"QueueChannel\",\"id\":732}"
-	type: "confirm_subscription"
-
-	receives pings every 5 seconds
-  		message: 1648149979
-		type: "ping"
-
-	### SEND QUEUE REQUEST ###
-	command: "message"
-	data: "{\"location\":\"asdf\",\"description\":\"asdf\",\"action\":\"new_request\"}"
-	identifier: "{\"channel\":\"QueueChannel\",\"id\":786}"
-*/

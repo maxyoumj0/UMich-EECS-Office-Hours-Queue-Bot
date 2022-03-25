@@ -40,9 +40,3 @@ chrome.tabs.onUpdated.addListener(function(tabId, changeInfo, tab) {
         })
     }
 });
-
-// chrome.action.onClicked.addListener((tab) => {
-//     chrome.tabs.create({
-//         url: "https://eecsoh.eecs.umich.edu/api/oauth2login"
-//     });
-// });
