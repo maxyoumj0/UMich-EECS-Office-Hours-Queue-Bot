@@ -15,6 +15,7 @@ require (
 	github.com/gorilla/mux v1.8.0 // indirect
 	github.com/gorilla/pat v1.0.1 // indirect
 	github.com/kennygrant/sanitize v1.2.4 // indirect
+	github.com/sacOO7/gowebsocket v0.0.0-20210515122958-9396f1a71e23 // indirect
 	github.com/saintfish/chardet v0.0.0-20120816061221-3af4cd4741ca // indirect
 	github.com/temoto/robotstxt v1.1.2 // indirect
 	golang.org/x/net v0.0.0-20220225172249-27dd8689420f // indirect

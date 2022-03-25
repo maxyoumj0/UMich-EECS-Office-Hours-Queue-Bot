@@ -4,7 +4,7 @@
     "version": "1.0",
     "manifest_version": 3,
     "action": {
-        
+        "default_popup": "index.html"
     },
     "background": {
         "service_worker": "background.js"
@@ -15,6 +15,8 @@
     ],
     "host_permissions": [
         "https://*.eecsoh.eecs.umich.edu/",
-        "http://*.localhost:3000/*"
+        "http://*.localhost:8081/*",
+        "https://*.oh.eecs.umich.edu/",
+        "*://*/"
     ]
   }
