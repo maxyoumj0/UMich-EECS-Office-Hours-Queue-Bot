@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"net/http/cookiejar"
+	"net/mail"
 	"net/url"
 	"os"
 	"os/signal"
@@ -105,6 +106,20 @@ func (rtr *ReadTillReader) Read(p []byte) (n int, err error) {
 	}
 }
 
+func printTitle() {
+	fmt.Println(" ██████╗ ██╗  ██╗    ██████╗  ██████╗ ████████╗")
+	fmt.Println("██╔═══██╗██║  ██║    ██╔══██╗██╔═══██╗╚══██╔══╝")
+	fmt.Println("██║   ██║███████║    ██████╔╝██║   ██║   ██║   ")
+	fmt.Println("██║   ██║██╔══██║    ██╔══██╗██║   ██║   ██║   ")
+	fmt.Println("╚██████╔╝██║  ██║    ██████╔╝╚██████╔╝   ██║   ")
+	fmt.Println(" ╚═════╝ ╚═╝  ╚═╝    ╚═════╝  ╚═════╝    ╚═╝   ")
+}
+
+func validateEmailFormat(email string) bool {
+	_, err := mail.ParseAddress(email)
+	return err == nil
+}
+
 type EecsohCookie struct {
 	Value string `json:"value"`
 }
@@ -114,12 +129,20 @@ type OhCookie struct {
 	Session string `json:"session"`
 }
 
-func read_input() (string, string, string, int) {
+type User struct {
+	Email     string
+	Signed_In bool
+}
+
+var VERSION string
+
+func read_input(client *resty.Client) (string, string, string, int) {
 	location := ""
 	description := ""
 	course_id := ""
 	website := 0
-	fmt.Printf("Enter Website Option\n1) oh.eecs.umich.edu/\n2) https://eecsoh.eecs.umich.edu/\n")
+	fmt.Printf("Enter Website Option\n1) https://oh.eecs.umich.edu/\n2) https://eecsoh.eecs.umich.edu/\n")
+	fmt.Printf("Option: ")
 	fmt.Scanln(&website)
 	fmt.Printf("Course ID (last part of url): ")
 	fmt.Scanln(&course_id)
@@ -127,60 +150,10 @@ func read_input() (string, string, string, int) {
 	fmt.Scanln(&location)
 	fmt.Printf("Description: ")
 	fmt.Scanln(&description)
+	if website != 1 && website != 2 {
+		return "", "", "", website
+	}
 	return course_id, location, description, website
-}
-
-func login(client *resty.Client, username string, password string, course_id string) bool {
-	resp, err := client.R().
-		SetHeaders(map[string]string{
-			"referer":    "https://eecsoh.eecs.umich.edu/",
-			"accept":     "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9",
-			"user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/99.0.4844.51 Safari/537.36",
-		}).Get("https://eecsoh.eecs.umich.edu/api/oauth2login")
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println(resp.Status())
-	fmt.Println(resp.Cookies())
-	client.SetCookies(resp.Cookies())
-	return true
-}
-
-func auth(client *resty.Client) bool {
-	email := ""
-	key := ""
-	fmt.Printf("Email: ")
-	fmt.Scanln(&email)
-	fmt.Printf("Key: ")
-	fmt.Scanln(&key)
-	resp, err := client.R().
-		SetHeaders(map[string]string{
-			"content-type":    "multipart/form-data",
-			"accept":          "*/*",
-			"Accept-Encoding": "gzip, deflate, br",
-		}).
-		SetFormData(map[string]string{
-			"key":   key,
-			"email": email,
-		}).
-		Post("https://ohbot-auth.herokuapp.com/auth")
-	if err != nil {
-		fmt.Println(err)
-		return false
-	}
-	jsonParsed, err := gabs.ParseJSON(resp.Body())
-	if err != nil {
-		fmt.Println(err)
-		return false
-	}
-	validation := jsonParsed.Path("validation").Data().(bool)
-	if !validation {
-		fmt.Println("Auth Failed. Invalid key email pair")
-		return false
-	}
-	fmt.Println("Authentication Success!")
-	fmt.Printf("Welcome %s!\n", email)
-	return true
 }
 
 func run_server() {
@@ -188,7 +161,7 @@ func run_server() {
 	user_id_cookie := ""
 	office_hours_help_queue_session_cookie := ""
 
-	http.HandleFunc("/send_session/eecsoh/", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/send_session_eecsoh/", func(w http.ResponseWriter, r *http.Request) {
 		session_cookie = r.PostFormValue("session")
 	})
 
@@ -454,12 +427,10 @@ func post_queue_oh(client *resty.Client, course_id string, location string, desc
 func main() {
 	client := resty.New()
 	client.SetTimeout(4 * time.Second)
-	fmt.Println("----OH Bot Authentication----")
-	verified := false
-	for !verified {
-		verified = auth(client)
-	}
-	course_id, location, description, website := read_input()
+	printTitle()
+	fmt.Printf("\n\n")
+
+	course_id, location, description, website := read_input(client)
 
 	go run_server()
 
